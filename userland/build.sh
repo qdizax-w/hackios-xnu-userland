@@ -547,14 +547,16 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 	# One entry taken out: PosterBoard's, the wallpaper's process. Its 350 MB are an iPhone's, whose GPU memory is not
 	# the process's; here Mesa and its buffers are, and it went over within a quarter of a second of every start --
 	# killed (JETSAM_REASON_MEMORY_PERPROCESSLIMIT) and started again 58 times in a few minutes, the wallpaper
-	# taking two minutes to appear and vanishing again. 1024 MB only moved its death to two seconds in. Without the
-	# entry it falls under the angels' default, which has no limit -- as in the boots without any table, where the
-	# wallpaper was drawn.
+	# taking two minutes to appear and vanishing again. 1024 MB only moved its death to two seconds in, and with no
+	# entry at all it met a cap as low as Apple's. So it is given none, explicitly: it draws the wallpaper as in the
+	# boots without any table -- where its growth then cost the whole phone memory (backboardd went, code 6: file
+	# cache thrashing) with the system image in RAM; the flash boot has a gigabyte more to give.
 	python3 - $IOS/rootfs/System/Library/LaunchDaemons/com.apple.jetsamproperties.D22.plist \
 	    root/LaunchDaemons/com.apple.jetsamproperties.D22.plist <<'PY'
 import plistlib, sys
 table = plistlib.load(open(sys.argv[1], 'rb'))
-del table['Version4']['Angel']['Override']['com.apple.PosterBoard']
+table['Version4']['Angel']['Override']['com.apple.PosterBoard'] = {
+    'ActiveSoftMemoryLimit': -1, 'InactiveSoftMemoryLimit': -1, 'ActiveHardMemoryLimit': -1, 'InactiveHardMemoryLimit': -1}
 plistlib.dump(table, open(sys.argv[2], 'wb'), fmt=plistlib.FMT_BINARY)
 PY
 	VOLUME=""
@@ -699,6 +701,16 @@ if [ -n "$FLASHBOOT" ] && [ -f $CACHE/dyld_shared_cache_arm64 ]; then
 	if [ -f ../fw-audio/aw882xx_acf.bin ]; then
 		mkdir -p flashboot/fw
 		cp ../fw-audio/aw882xx_acf.bin flashboot/fw/
+	fi
+	# miatoll's modem, whose DSP runs the WCN3990's Wi-Fi firmware (bsd/dev/redwood_wifi.c, wifi_step=N there): the
+	# phone's own modem.mdt and modem.bNN, wlanmdsp.mbn and the radio's board files bdwlan.*, from its modem partition
+	# (NON-HLOS.bin of its fastboot ROM, image/) in ../fw-modem, never in the repository. 64 MB of the boot volume.
+	if [ -f ../fw-modem/modem.mdt ]; then
+		mkdir -p flashboot/fw
+		cp ../fw-modem/modem.mdt ../fw-modem/modem.b[0-9][0-9] flashboot/fw/
+		for f in ../fw-modem/wlanmdsp.mbn ../fw-modem/bdwlan.*; do
+			[ -f "$f" ] && cp "$f" flashboot/fw/
+		done
 	fi
 	# the package manager's prefix, when tools/mk-jb.sh has fetched one: /jb of the boot volume, which is
 	# /private/preboot/jb once the iOS volume is the root -- the volume where a rootless jailbreak keeps its
