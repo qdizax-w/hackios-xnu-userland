@@ -1,0 +1,53 @@
+# SLIM=slim.miatoll: what a 4 GB phone's system image leaves out (userland/build.sh). The kernel's window
+# there is about 3 GB, of which the image may take 2144 MB (xnuloader/loader.c, RESIDENT_RD_RESERVE).
+# Left out: what nothing on the way to the lock screen and the home screen uses.
+
+# the applications iOS installs on its first boot (select-system.py puts them in /Applications);
+# Clock, Calendar, Calculator and Contacts stay, so that the home screen is not empty
+Applications/Maps.app
+Applications/Books.app
+Applications/Bridge.app
+Applications/Freeform.app
+Applications/Music.app
+Applications/MobileNotes.app
+Applications/Podcasts.app
+Applications/FindMy.app
+Applications/Weather.app
+Applications/Home.app
+Applications/Fitness.app
+Applications/Reminders.app
+Applications/MobileMail.app
+Applications/News.app
+Applications/Measure.app
+Applications/Files.app
+Applications/VoiceMemos.app
+Applications/Health.app
+Applications/Tips.app
+Applications/Stocks.app
+Applications/Shortcuts.app
+Applications/SequoiaTranslator.app
+Applications/AppleTV.app
+Applications/FaceTime.app
+Applications/Passbook.app
+Applications/MobileStore.app
+Applications/Magnifier.app
+Applications/Compass.app
+
+# applications of the system's own that nothing starts by itself
+Applications/AppStore.app
+Applications/Diagnostics.app
+Applications/DiagnosticsService.app
+Applications/MTLReplayer.app
+Applications/FTMInternal-4.app
+Applications/Xcode Previews.app
+
+# fonts that applications offer (the interface's own are in Core, CoreUI and CoreAddition)
+System/Library/Fonts/AppFonts
+
+# frameworks only applications left out above use: the camera's effects, Maps' renderer, iWork
+# documents in Quick Look, the TV application; and the decoding of cameras' RAW photographs
+System/Library/PrivateFrameworks/CameraEffectsKit.framework
+System/Library/PrivateFrameworks/VectorKit.framework
+System/Library/PrivateFrameworks/iWorkImport.framework
+System/Library/PrivateFrameworks/VideosUI.framework
+System/Library/CoreServices/RawCameraSupport.bundle

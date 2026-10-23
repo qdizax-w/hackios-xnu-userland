@@ -570,6 +570,12 @@ if [ -f ../fw-haptic/aw8697_haptic.bin ]; then
 	mkdir -p root/fw
 	install -m 0644 ../fw-haptic/aw8697_haptic.bin root/fw/
 fi
+# ... and miatoll's touch screen firmware (its FT8756 keeps none: bsd/dev/miatoll_touch.c loads it at every boot,
+# ft8756=1), Xiaomi's, made by ../tools/mk-fw-touch-miatoll.sh into ../fw-touch (176 KB; not in the repository)
+if [ -f ../fw-touch/ft8756.bin ]; then
+	mkdir -p root/fw
+	install -m 0644 ../fw-touch/ft8756.bin root/fw/
+fi
 # ... and the cameras' register tables (bsd/dev/redwood_camera.c, cam=2 and up), made by tools/camsensor.py out of
 # the sensors' module files of Android's camera stack, the phone's /vendor/lib64/camera/com.qti.sensormodule.
 # redwood_<maker>_<sensor>_<camera>.bin, in ../fw-camera (the vendor's: neither they nor the tables are in the
@@ -711,7 +717,8 @@ fi
 # --- the system image -----------------------------------------------------------------------------
 if [ -f $IOS/system.manifest ] && [ -f $CACHE/dyld_shared_cache_arm64 ] &&
 	{ [ ! -f system.apfs ] || [ obj/stage0 -nt system.apfs ] || [ $IOS/system.manifest -nt system.apfs ] ||
-	  [ $IOS/cryptex -nt system.apfs ] || [ $IOS/cryptex-app -nt system.apfs ] || [ -n "$SYSTEM" ]; }; then
+	  [ $IOS/cryptex -nt system.apfs ] || [ $IOS/cryptex-app -nt system.apfs ] || [ -n "$SYSTEM" ] ||
+	  { [ -n "$SLIM" ] && [ "$SLIM" -nt system.apfs ]; }; }; then
 	# what ios165/select-system.py has chosen since ios165/rootfs was extracted is not in it, and would not be
 	# in the image either (so it was once with the audio plug-ins and the system's sounds: iOS found no
 	# speaker and played nothing, though our device was there and the kernel's side worked)
@@ -822,9 +829,40 @@ if [ -f $IOS/system.manifest ] && [ -f $CACHE/dyld_shared_cache_arm64 ] &&
 		# -f: a cryptex fetched with the cache already in it would otherwise stop the build
 		ln -f "$f" $D/
 	done
+	# SLIM=<file>: paths (one per line, as in the image, # for comments) left out of the system image, for a
+	# phone with less RAM (slim.miatoll); out of the tree and out of a copy of the manifest, which would
+	# otherwise make an empty directory of each
+	MANIFEST=$IOS/system.manifest
+	if [ -n "$SLIM" ]; then
+		MANIFEST=$PWD/system.slim.manifest
+		python3 - "$SLIM" $IOS/system.manifest "$MANIFEST" sysroot <<'PY'
+import os, shutil, sys
+paths = [l.strip().strip('/') for l in open(sys.argv[1]) if l.strip() and not l.lstrip().startswith('#')]
+gone = 0
+for p in paths:
+    full = os.path.join(sys.argv[4], p)
+    if os.path.isdir(full) and not os.path.islink(full):
+        shutil.rmtree(full); gone += 1
+    elif os.path.lexists(full):
+        os.unlink(full); gone += 1
+    else:
+        print(f'build.sh: SLIM: {p} is not in the image', file=sys.stderr)
+kept = dropped = 0
+with open(sys.argv[3], 'wb') as out:
+    for raw in open(sys.argv[2], 'rb'):
+        f = raw.rstrip(b'\n').split(b'\t')
+        path = f[3].decode('utf-8', 'surrogateescape').strip('/') if len(f) > 3 else ''
+        if any(path == p or path.startswith(p + '/') for p in paths):
+            dropped += 1
+        else:
+            out.write(raw); kept += 1
+print(f'build.sh: SLIM: {gone} of {len(paths)} paths left out, {dropped} manifest lines dropped')
+PY
+	fi
 	# zlib where it saves room, as Apple keeps the root (a small file whole in its attribute): 5.4 GB of
 	# files in 2.5 GB, what fits into the phone's RAM beside iOS
-	python3 ../tools/apfs/mkapfs.py -z -o system.apfs System=sysroot,manifest=$IOS/system.manifest | tail -1
-	[ -z "$CHECK" ] || ../tools/apfs/check-image.sh system.apfs System=sysroot,manifest=$IOS/system.manifest
+	python3 ../tools/apfs/mkapfs.py -z -o system.apfs System=sysroot,manifest=$MANIFEST | tail -1
+	[ -z "$CHECK" ] || ../tools/apfs/check-image.sh system.apfs System=sysroot,manifest=$MANIFEST
+	rm -f system.slim.manifest
 	rm -rf sysroot
 fi
