@@ -539,6 +539,24 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 	# and not by what select-system.py extracted here (--root-volume; seven jobs turn on the difference,
 	# fairplayd among them).
 	cp com.redwood.demo.plist com.redwood.wifi.plist root/LaunchDaemons/
+	# ... and the device's table of memory limits, which is not a job (mkjobs.py denies the word) but sits beside them:
+	# launchd reads /System/Library/LaunchDaemons/com.apple.jetsamproperties.<model>.plist, and that directory is this
+	# one. Without it every daemon gets launchd's default limit, and backboardd -- the window server, with Mesa and
+	# every layer's texture in it -- outgrew that within minutes: OS_REASON_JETSAM, code 6 (the per-process limit),
+	# and SpringBoard torn down with it. The table gives it none, as on the phone this image is (iPhone10,3, D22).
+	# One entry taken out: PosterBoard's, the wallpaper's process. Its 350 MB are an iPhone's, whose GPU memory is not
+	# the process's; here Mesa and its buffers are, and it went over within a quarter of a second of every start --
+	# killed (JETSAM_REASON_MEMORY_PERPROCESSLIMIT) and started again 58 times in a few minutes, the wallpaper
+	# taking two minutes to appear and vanishing again. 1024 MB only moved its death to two seconds in. Without the
+	# entry it falls under the angels' default, which has no limit -- as in the boots without any table, where the
+	# wallpaper was drawn.
+	python3 - $IOS/rootfs/System/Library/LaunchDaemons/com.apple.jetsamproperties.D22.plist \
+	    root/LaunchDaemons/com.apple.jetsamproperties.D22.plist <<'PY'
+import plistlib, sys
+table = plistlib.load(open(sys.argv[1], 'rb'))
+del table['Version4']['Angel']['Override']['com.apple.PosterBoard']
+plistlib.dump(table, open(sys.argv[2], 'wb'), fmt=plistlib.FMT_BINARY)
+PY
 	VOLUME=""
 	[ -n "$FLASHBOOT" ] && [ -f $IOS/rootfs.slt ] && VOLUME="--root-volume $IOS/rootfs.slt"
 	[ -n "$IOS_JOBS" ] && OSLOG=${OSLOG-com.apple.backboardd} ./mkjobs.py ${REST:+--rest} $VOLUME $IOS/rootfs root/LaunchDaemons $IOS_JOBS
