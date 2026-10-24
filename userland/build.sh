@@ -702,16 +702,6 @@ if [ -n "$FLASHBOOT" ] && [ -f $CACHE/dyld_shared_cache_arm64 ]; then
 		mkdir -p flashboot/fw
 		cp ../fw-audio/aw882xx_acf.bin flashboot/fw/
 	fi
-	# miatoll's modem, whose DSP runs the WCN3990's Wi-Fi firmware (bsd/dev/redwood_wifi.c, wifi_step=N there): the
-	# phone's own modem.mdt and modem.bNN, wlanmdsp.mbn and the radio's board files bdwlan.*, from its modem partition
-	# (NON-HLOS.bin of its fastboot ROM, image/) in ../fw-modem, never in the repository. 64 MB of the boot volume.
-	if [ -f ../fw-modem/modem.mdt ]; then
-		mkdir -p flashboot/fw
-		cp ../fw-modem/modem.mdt ../fw-modem/modem.b[0-9][0-9] flashboot/fw/
-		for f in ../fw-modem/wlanmdsp.mbn ../fw-modem/bdwlan.*; do
-			[ -f "$f" ] && cp "$f" flashboot/fw/
-		done
-	fi
 	# the package manager's prefix, when tools/mk-jb.sh has fetched one: /jb of the boot volume, which is
 	# /private/preboot/jb once the iOS volume is the root -- the volume where a rootless jailbreak keeps its
 	# Procursus on an iPhone as well; init grafts it onto /var/jb (src/init.c, mount_writable)
