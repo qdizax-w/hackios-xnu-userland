@@ -5,3 +5,12 @@
 /bin/ps -A
 # "swipe up to open": until somebody can do it with a finger
 /redwood/bin/rwtouch wait 32 swipe 0.5 0.985 0.5 0.3 250 &
+# Sileo (the package manager's prefix is in the image, grafted onto /var/jb by init): registered with
+# LaunchServices so that it is on the home screen, and the bootstrap's once-a-boot preparation
+/var/jb/bin/sh /var/jb/prep.sh
+# Sileo (the package manager's prefix is in the image, grafted onto /var/jb by init): registered with
+# LaunchServices so that it is on the home screen, and the bootstrap's once-a-boot preparation
+/var/jb/bin/sh /var/jb/prep.sh
+# a shell over the network (usbnet=1: `ssh root@10.42.0.100`), with the key in ssh/authorized_keys alone
+# (userland/build.sh puts it on the data volume; no key there, no way in): see rc.jobs.ssh
+/var/jb/usr/sbin/sshd -D -e -h /var/root/.ssh/ssh_host_ed25519_key -o UsePAM=no -o PasswordAuthentication=no -o PermitRootLogin=prohibit-password -o AuthorizedKeysFile=/var/root/.ssh/authorized_keys &

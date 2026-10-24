@@ -73,7 +73,9 @@ static const char *const SKIP[] = {
 	"vm",                   /* the compressor's swap */
 	"log", "logs",          /* what the last boot said */
 	"db/diagnostics", "db/uuidtext",        /* logd's archive: tens of MB a boot, and remade */
-	"jb",                   /* the package prefix, grafted from the read-only image at every boot */
+	/* (the package prefix, jb, is kept: init grafts it from the read-only image first and puts this back
+	 * over it, so what Sileo installed comes back -- the downloaded packages it was installed from do not) */
+	"jb/var/cache/apt/archives",
 	NULL,
 };
 
@@ -112,6 +114,7 @@ struct entry {
 #define VAR_SAVE_IDLE   1
 #define VAR_SAVE_WANTED 2
 #define VAR_SAVE_DONE   3
+#define VAR_SAVE_SOON   4               /* the kernel asking for a save now, not waiting: power and volume down held */
 
 /* Is NAME=VALUE among the kernel's arguments? (as init.c reads them) */
 static int
@@ -131,6 +134,39 @@ boot_arg_is(const char *name, const char *value)
 		if (strncmp(p, name, n) == 0 && p[n] == '=' && strncmp(p + n + 1, value, v) == 0 &&
 		    (p[n + 1 + v] == 0 || p[n + 1 + v] == ' ')) {
 			return 1;
+		}
+		while (*p && *p != ' ') {
+			p++;
+		}
+	}
+	return 0;
+}
+
+static long parse_number(const char *text);
+
+/* The number NAME=N among the kernel's arguments, 0 if it is not there */
+static long
+boot_arg_number(const char *name)
+{
+	static char args[1024];
+	size_t len = sizeof(args) - 1, n = strlen(name);
+
+	if (sysctlbyname("kern.bootargs", args, &len, NULL, 0) != 0) {
+		return 0;
+	}
+	args[len < sizeof(args) ? len : sizeof(args) - 1] = 0;
+	for (char *p = args; *p;) {
+		while (*p == ' ') {
+			p++;
+		}
+		if (strncmp(p, name, n) == 0 && p[n] == '=') {
+			char *end = p + n + 1;
+
+			while (*end && *end != ' ') {
+				end++;
+			}
+			*end = 0;
+			return parse_number(p + n + 1);
 		}
 		while (*p && *p != ' ') {
 			p++;
@@ -1265,7 +1301,7 @@ static int
 watch(int seconds)
 {
 	uint64_t last = 0;
-	int asked = 0;
+	int asked = 0, soon;
 
 	fd = open(DEVICE, O_RDWR, 0);
 	if (fd < 0) {
@@ -1291,11 +1327,13 @@ watch(int seconds)
 		struct timeval tv = { 0, 0 };
 		int state = VAR_SAVE_NONE;
 
-		if (sysctl_int("kern.redwood.var_save", &state) == 0 && state == VAR_SAVE_WANTED) {
-			asked = 1;
+		soon = 0;
+		if (sysctl_int("kern.redwood.var_save", &state) == 0) {
+			asked = state == VAR_SAVE_WANTED;
+			soon = state == VAR_SAVE_SOON;
 		}
 		gettimeofday(&tv, NULL);
-		if (asked || (seconds > 0 && (uint64_t)tv.tv_sec - last >= (uint64_t)seconds)) {
+		if (asked || soon || (seconds > 0 && (uint64_t)tv.tv_sec - last >= (uint64_t)seconds)) {
 			int ok = save_once();
 
 			if (!ok) {
@@ -1306,6 +1344,10 @@ watch(int seconds)
 				/* answered either way: the kernel is waiting on this to go back to the loader */
 				(void)sysctl_set_int("kern.redwood.var_save", VAR_SAVE_DONE);
 				return ok;
+			}
+			if (soon) {
+				printf("var_store: saved as the kernel asked (power and volume down)\n");
+				(void)sysctl_set_int("kern.redwood.var_save", VAR_SAVE_IDLE);
 			}
 		}
 		usleep(100000);
@@ -1381,7 +1423,9 @@ main(int argc, char **argv, char **envp)
 			printf("var_store: not asked to keep the data volume (var_store=1): nothing to watch\n");
 			return 0;
 		}
-		return watch(argc > 2 ? (int)parse_number(argv[2]) : 0) ? 0 : 1;
+		/* seconds between saves: the job's argument, else boot-arg var_save_secs= (a phone whose runs end
+		 * with a reset, never back through the loader -- miatoll with usbnet=1 -- has no other moment) */
+		return watch(argc > 2 ? (int)parse_number(argv[2]) : (int)boot_arg_number("var_save_secs")) ? 0 : 1;
 	}
 	fd = open(DEVICE, strcmp(what, "load") == 0 || strcmp(what, "show") == 0 ? O_RDONLY : O_RDWR, 0);
 	if (fd < 0) {
