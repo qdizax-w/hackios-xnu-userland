@@ -371,7 +371,7 @@ reach(const char *name)
 }
 
 /*
- * With wifi=1 among the kernel's arguments: wait for en0, and for configd's own network service for
+ * With wifi=1 (or usbnet=1: en0 is the USB cable) among the kernel's arguments: wait for en0, and for configd's own network service for
  * it ("Wi-Fi", made of the radio's IOKit objects, iokit/Kernel/RedwoodWLAN.cpp). That service runs
  * DHCP by itself, and it has to be the one that does: wifid takes the interface for usable only
  * when the address appears under a service whose settings name en0, and the service "dhcp en0"
@@ -390,7 +390,7 @@ wifi(void)
 		return;
 	}
 	for (const char *word = strtok(arguments, " "); word != NULL; word = strtok(NULL, " ")) {
-		wanted |= strcmp(word, "wifi=1") == 0;
+		wanted |= strcmp(word, "wifi=1") == 0 || strcmp(word, "usbnet=1") == 0;    /* (usbnet: the USB cable, redwood_usbnet.c) */
 	}
 	if (!wanted) {
 		return;
